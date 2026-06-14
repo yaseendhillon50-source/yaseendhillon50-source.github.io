@@ -412,7 +412,12 @@ async function loadFromFirebase() {
     const prodsSnap = await getDocs(collection(db, "products"));
     if (!prodsSnap.empty) {
       products = [];
-      prodsSnap.forEach(d => products.push({id: d.id, ...d.data()}));
+      prodsSnap.forEach(d => {
+        const data = d.data();
+        // Convert specs from Firebase object format back to array
+        if(data.specs) data.specs = specsFromFirebase(data.specs);
+        products.push({id: d.id, ...data});
+      });
       products.sort((a,b) => (a.order||0)-(b.order||0));
     }
   } catch(e) { console.log("Firebase load error:", e); }
@@ -423,6 +428,16 @@ async function loadFromFirebase() {
   renderAll();
 }
 
+// Convert specs array to Firebase-compatible format
+function specsToFirebase(specs) {
+  if(!specs||!specs.length) return [];
+  return specs.map(s => Array.isArray(s) ? {k: s[0]||'', v: s[1]||''} : s);
+}
+function specsFromFirebase(specs) {
+  if(!specs||!specs.length) return [];
+  return specs.map(s => Array.isArray(s) ? s : [s.k||'', s.v||'']);
+}
+
 // SAVE TO FIREBASE
 async function saveToFirebase() {
   try {
@@ -431,6 +446,8 @@ async function saveToFirebase() {
       const p = {...products[i], order: i};
       const id = p.id;
       delete p.id;
+      // Convert nested arrays to objects for Firebase
+      p.specs = specsToFirebase(p.specs);
       await setDoc(doc(db, "products", id), p);
     }
     return true;
